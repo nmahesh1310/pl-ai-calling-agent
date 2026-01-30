@@ -203,10 +203,19 @@ async def ws_handler(ws: WebSocket):
             log.info(f"🗣 USER → {text} | intent={intent}")
 
             if intent == "YES":
-                await speak(ws, "Great. Let me quickly explain the process.", session)
-                for step in STEPS:
-                    await speak(ws, step, session)
-                continue
+    if not session["process_explained"]:
+        await speak(ws, "Great. Let me quickly explain the process.", session)
+        for step in STEPS:
+            await speak(ws, step, session)
+        session["process_explained"] = True
+    else:
+        await speak(
+            ws,
+            "Perfect. Are you able to proceed with downloading the app now?",
+            session
+        )
+    continue
+
 
             if intent == "PROCESS":
                 await speak(ws,
