@@ -40,10 +40,16 @@ PITCH_2 = (
     "This is a limited time offer. Are you interested?"
 )
 
+GUIDE_QUESTION = (
+    "Great. How would you like to continue? "
+    "I can guide you step by step for loan disbursal, "
+    "or I can answer any questions you have."
+)
+
 STEPS = [
-    "First, download the Rupeek app from the Play Store.",
-    "Next, complete your KYC using Aadhaar.",
-    "Then select your loan amount and confirm disbursal."
+    "Step one. Download the Rupeek app from the Play Store.",
+    "Step two. Complete your KYC using Aadhaar.",
+    "Step three. Select your loan amount and confirm disbursal."
 ]
 
 # ================= INTENT =================
@@ -53,23 +59,23 @@ def classify(text: str):
     if not t or len(t) < 2:
         return "EMPTY"
 
-    if any(x in t for x in ["uh", "um", "hmm", "okay", "right"]):
-        return "FILLER"
-
     if any(x in t for x in ["yes", "yeah", "interested", "sure", "ok"]):
         return "YES"
 
-    if any(x in t for x in ["no", "not interested", "not able", "can't", "later"]):
+    if any(x in t for x in ["no", "not interested", "later", "not now"]):
         return "NO"
 
-    if any(x in t for x in ["process", "steps", "procedure", "how does it work"]):
-        return "PROCESS"
+    if any(x in t for x in ["guide", "steps", "process", "how to"]):
+        return "GUIDE"
 
-    if any(x in t for x in ["limit", "amount", "how much"]):
-        return "LIMIT"
+    if any(x in t for x in ["question", "faq", "ask", "doubt"]):
+        return "FAQ"
 
     if any(x in t for x in ["interest", "emi", "rate"]):
         return "INTEREST"
+
+    if any(x in t for x in ["limit", "amount", "how much"]):
+        return "LIMIT"
 
     if any(x in t for x in ["done", "completed", "finished"]):
         return "DONE"
@@ -150,7 +156,8 @@ async def ws_handler(ws: WebSocket):
     session = {
         "started": False,
         "bot_speaking": False,
-        "process_explained": False
+        "mode": None,        # None | GUIDE | FAQ
+        "step_index": 0
     }
 
     buf, speech = b"", b""
@@ -161,7 +168,6 @@ async def ws_handler(ws: WebSocket):
             try:
                 msg = await ws.receive()
             except RuntimeError:
-                log.info("🔌 Client disconnected safely")
                 break
 
             if "text" not in msg:
@@ -204,25 +210,30 @@ async def ws_handler(ws: WebSocket):
             intent = classify(text)
             log.info(f"🗣 USER → {text} | intent={intent}")
 
-            if intent == "YES":
-                if not session["process_explained"]:
-                    await speak(ws, "Great. Let me quickly explain the process.", session)
-                    for step in STEPS:
-                        await speak(ws, step, session)
-                    session["process_explained"] = True
-                else:
-                    await speak(
-                        ws,
-                        "Perfect. Are you able to proceed with downloading the app now?",
-                        session
-                    )
+            # ===== CORE FLOW =====
+
+            if intent == "YES" and session["mode"] is None:
+                await speak(ws, GUIDE_QUESTION, session)
                 continue
 
-            if intent == "PROCESS":
+            if intent == "GUIDE":
+                session["mode"] = "GUIDE"
+                session["step_index"] = 0
+                await speak(ws, STEPS[0], session)
+                continue
+
+            if intent == "FAQ":
+                session["mode"] = "FAQ"
+                await speak(ws, "Sure. You can ask me any questions.", session)
+                continue
+
+            # ===== FAQ ANSWERS (available anytime) =====
+
+            if intent == "INTEREST":
                 await speak(
                     ws,
-                    "The process is simple. Download the app, complete KYC, "
-                    "select the amount, and get instant disbursal.",
+                    "This is a zero interest offer if repaid on time. "
+                    "If delayed, standard interest applies as shown in the app.",
                     session
                 )
                 continue
@@ -230,26 +241,31 @@ async def ws_handler(ws: WebSocket):
             if intent == "LIMIT":
                 await speak(
                     ws,
-                    "Your approved loan limit is already available inside the Rupeek app.",
+                    "Your approved loan limit is already visible inside the Rupeek app.",
                     session
                 )
                 continue
 
-            if intent == "INTEREST":
-                await speak(
-                    ws,
-                    "This is a zero interest offer if repaid on time. "
-                    "In case of delay, standard interest applies as shown in the app.",
-                    session
-                )
+            # ===== GUIDE FLOW =====
+
+            if session["mode"] == "GUIDE":
+                session["step_index"] += 1
+                if session["step_index"] < len(STEPS):
+                    await speak(ws, STEPS[session["step_index"]], session)
+                else:
+                    await speak(
+                        ws,
+                        "Great! Whenever you’re ready, just open the Rupeek app and check your pre-approved loan limit.",
+                        session
+                    )
+                    await ws.close()
+                    break
                 continue
+
+            # ===== EXIT CASES =====
 
             if intent == "NO":
-                await speak(
-                    ws,
-                    "No problem at all. Thank you for your time. Have a great day.",
-                    session
-                )
+                await speak(ws, "No problem at all. Thank you for your time.", session)
                 await ws.close()
                 break
 
@@ -263,20 +279,16 @@ async def ws_handler(ws: WebSocket):
                 break
 
             if intent == "HUMAN":
-                await speak(
-                    ws,
-                    "Sure, I will connect you to a representative.",
-                    session
-                )
+                await speak(ws, "Sure, I will connect you to a representative.", session)
                 await ws.close()
                 break
 
-            if intent in ["FILLER", "UNKNOWN"]:
-                await speak(
-                    ws,
-                    "No worries. Take your time. Let me know if you want to understand the process or loan amount.",
-                    session
-                )
+            # ===== FALLBACK =====
+            await speak(
+                ws,
+                "Would you like me to guide you through the process or answer your questions?",
+                session
+            )
 
     except WebSocketDisconnect:
         log.info("🔌 Call disconnected")
