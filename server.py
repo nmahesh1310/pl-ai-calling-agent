@@ -1,4 +1,4 @@
-import os, json, asyncio, logging, sys, base64, requests, io, struct, time
+import os, json, asyncio, logging, sys, base64, requests, io, struct
 from dotenv import load_dotenv
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 import uvicorn
@@ -12,7 +12,6 @@ SARVAM_API_KEY = os.getenv("SARVAM_API_KEY")
 SAMPLE_RATE = 16000
 MIN_CHUNK_SIZE = 3200
 SPEECH_THRESHOLD = 520
-
 SILENCE_CHUNKS = 10
 MIN_SPEECH_CHUNKS = 6
 POST_TTS_DELAY = 0.6
@@ -82,8 +81,10 @@ def classify(text: str):
 
 # ================= AUDIO =================
 def is_speech(pcm):
-    energy = sum(abs(int.from_bytes(pcm[i:i+2], "little", signed=True))
-                 for i in range(0, len(pcm)-1, 2))
+    energy = sum(
+        abs(int.from_bytes(pcm[i:i+2], "little", signed=True))
+        for i in range(0, len(pcm)-1, 2)
+    )
     return (energy / max(len(pcm)//2, 1)) > SPEECH_THRESHOLD
 
 def pcm_to_wav(pcm):
@@ -147,10 +148,10 @@ async def ws_handler(ws: WebSocket):
     log.info("🎧 Call connected")
 
     session = {
-    "started": False,
-    "bot_speaking": False,
-    "process_explained": False
-}
+        "started": False,
+        "bot_speaking": False,
+        "process_explained": False
+    }
 
     buf, speech = b"", b""
     silence_chunks, speech_chunks = 0, 0
@@ -204,22 +205,22 @@ async def ws_handler(ws: WebSocket):
             log.info(f"🗣 USER → {text} | intent={intent}")
 
             if intent == "YES":
-    if not session["process_explained"]:
-        await speak(ws, "Great. Let me quickly explain the process.", session)
-        for step in STEPS:
-            await speak(ws, step, session)
-        session["process_explained"] = True
-    else:
-        await speak(
-            ws,
-            "Perfect. Are you able to proceed with downloading the app now?",
-            session
-        )
-    continue
-
+                if not session["process_explained"]:
+                    await speak(ws, "Great. Let me quickly explain the process.", session)
+                    for step in STEPS:
+                        await speak(ws, step, session)
+                    session["process_explained"] = True
+                else:
+                    await speak(
+                        ws,
+                        "Perfect. Are you able to proceed with downloading the app now?",
+                        session
+                    )
+                continue
 
             if intent == "PROCESS":
-                await speak(ws,
+                await speak(
+                    ws,
                     "The process is simple. Download the app, complete KYC, "
                     "select the amount, and get instant disbursal.",
                     session
@@ -227,14 +228,16 @@ async def ws_handler(ws: WebSocket):
                 continue
 
             if intent == "LIMIT":
-                await speak(ws,
+                await speak(
+                    ws,
                     "Your approved loan limit is already available inside the Rupeek app.",
                     session
                 )
                 continue
 
             if intent == "INTEREST":
-                await speak(ws,
+                await speak(
+                    ws,
                     "This is a zero interest offer if repaid on time. "
                     "In case of delay, standard interest applies as shown in the app.",
                     session
@@ -242,7 +245,8 @@ async def ws_handler(ws: WebSocket):
                 continue
 
             if intent == "NO":
-                await speak(ws,
+                await speak(
+                    ws,
                     "No problem at all. Thank you for your time. Have a great day.",
                     session
                 )
@@ -250,7 +254,8 @@ async def ws_handler(ws: WebSocket):
                 break
 
             if intent == "DONE":
-                await speak(ws,
+                await speak(
+                    ws,
                     "Great! Whenever you’re ready, just open the Rupeek app and check your pre-approved loan limit.",
                     session
                 )
@@ -258,7 +263,8 @@ async def ws_handler(ws: WebSocket):
                 break
 
             if intent == "HUMAN":
-                await speak(ws,
+                await speak(
+                    ws,
                     "Sure, I will connect you to a representative.",
                     session
                 )
@@ -266,7 +272,8 @@ async def ws_handler(ws: WebSocket):
                 break
 
             if intent in ["FILLER", "UNKNOWN"]:
-                await speak(ws,
+                await speak(
+                    ws,
                     "No worries. Take your time. Let me know if you want to understand the process or loan amount.",
                     session
                 )
