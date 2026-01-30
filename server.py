@@ -147,9 +147,10 @@ async def ws_handler(ws: WebSocket):
     log.info("🎧 Call connected")
 
     session = {
-        "started": False,
-        "bot_speaking": False
-    }
+    "started": False,
+    "bot_speaking": False,
+    "process_explained": False
+}
 
     buf, speech = b"", b""
     silence_chunks, speech_chunks = 0, 0
